@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Flow Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            height: 400px;
+            width: 100%;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-online {
+            background-color: #22c55e;
+        }
+        .status-offline {
+            background-color: #ef4444;
+        }
+        .alert {
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .metric-card {
+            transition: transform 0.2s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+        .dark .bg-gray-100 {
+            background-color: #1f2937;
+        }
+        .dark .bg-white {
+            background-color: #374151;
+        }
+        .dark .bg-gray-50 {
+            background-color: #4b5563;
+        }
+        .dark .text-gray-900 {
+            color: #d1d5db expectativa
+        }
+        .dark .text-gray-500 {
+            color: #9ca3af;
+        }
+        .dark .border-gray-200 {
+            border-color: #4b5563;
+        }
+        .dark .text-blue-600 {
+            color: #60a5fa;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2563eb;
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        .switch.disabled .slider {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 transition-colors duration-300">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold">Water Flow Dashboard</h1>
+                <p class="text-gray-500 mt-1">Real-time monitoring and control of your water system</p>
+            </div>
+            <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
+                <svg id="theme-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                </svg>
+            </button>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-lg p-6 border border-gray-200">
+                <div class="flex items-center mb-4">
+                    <span id="status-dot" class="status-dot status-offline mr-2"></span>
+                    <span id="status-text" class="text-lg font-medium">Offline</span>
+                </div>
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                    Valve Control
+                </h3>
+                <div class="flex items-center">
+                    <label class="switch">
+                        <input type="checkbox" id="valve-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="ml-3 text-sm font-medium">Toggle Valve</span>
+                </div>
+                <div id="high-flow-alert" class="hidden mt-4 bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded alert">
+                    <p class="font-semibold flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        High Flow Rate Detected
+                    </p>
+                    <p>Flow rate exceeds 100 L/min.</p>
+                </div>
+            </div>
+            <div class="lg:col-span-2 bg-white rounded-lg p-6 border border-gray-200">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    Water Usage Summary
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="metric-card text-center p-4 bg-gray-50 rounded-lg">
+                        <p class="text-2xl font-bold text-blue-600" id="today-usage">0 L</p>
+                        <p class="text-sm text-gray-500">Today</p>
+                    </div>
+                    <div class="metric-card text-center p-4 bg-gray-50 rounded-lg">
+                        <p class="text-2xl font-bold text-blue-600" id="week-usage">0 L</p>
+                        <p class="text-sm text-gray-500">Last 7 Days</p>
+                    </div>
+                    <div class="metric-card text-center p-4 bg-gray-50 rounded-lg">
+                        <p class="text-2xl font-bold text-blue-600" id="month-usage">0 L</p>
+                        <p class="text-sm text-gray-500">Last 30 Days</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-6 border border-gray-200 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                    Water Flow Metrics
+                </h3>
+                <div class="flex space-x-2">
+                    <button id="export-csv" class="flex items-center px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+            <div id="chart-content" class="relative">
+                <div id="flow-rate-chart-container" class="chart-container">
+                    <canvas id="flow-rate-chart"></canvas>
+                </div>
+            </div>
+            <div class="mt-8">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    Daily Usage (Last 7 Days)
+                </h3>
+                <div class="chart-container">
+                    <canvas id="daily-usage-chart"></canvas>
+                </div>
+            </div>
+            <div class="mt-8">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    Historical Data
+                </h3>
+                <div class="flex justify-between mb-4">
+                    <button id="prev-page" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50" disabled>Previous</button>
+                    <span id="page-info" class="text-sm font-medium">Page 1</span>
+                    <button id="next-page" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Next</button>
+                </div>
+                <div class="table-container">
+                    <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                            <tr>
+                                <th class="px-6 py-3">Timestamp</th>
+                                <th class="px-6 py-3">Flow Rate (L/min)</th>
+                                <th class="px-6 py-3">Total Volume (L)</th>
+                                <th class="px-6 py-3">Valve State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-sm text-gray-500">
+            <p id="last-updated">Last updated: --</p>
+        </footer>
+    </div>
+
+    <script>
+        const API_URL = "https://web-production-83fd.up.railway.app";
+        let flowRateChart;
+        let dailyUsageChart;
+        let currentPage = 0;
+        const recordsPerPage = 100;
+        const refreshInterval = 1000;
+        let lastOnlineStatus = null; // Track previous online/offline status
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupThemeToggle();
+            initCharts();
+            document.getElementById('valve-toggle').addEventListener('change', toggleValve);
+            document.getElementById('export-csv').addEventListener('click', exportToCSV);
+            document.getElementById('prev-page').addEventListener('click', () => changePage(-1));
+            document.getElementById('next-page').addEventListener('click', () => changePage(1));
+            fetchData();
+            fetchMetrics();
+            getValveState();
+            setInterval(() => {
+                fetchData();
+                fetchMetrics();
+                getValveState();
+            }, refreshInterval);
+        });
+
+        function setupThemeToggle() {
+            const toggleButton = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const isDark = localStorage.getItem('theme') === 'dark';
+            document.documentElement.classList.toggle('dark', isDark);
+            themeIcon.innerHTML = isDark ? 
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />' :
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />';
+            toggleButton.addEventListener('click', () => {
+                const isDarkNow = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDarkNow ? 'dark' : 'light');
+                themeIcon.innerHTML = isDarkNow ? 
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />' :
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />';
+            });
+        }
+
+        function initCharts() {
+            if (typeof Chart === 'undefined') {
+                showToast('Chart.js failed to load. Charts will not display.', 'error');
+                return;
+            }
+            const flowRateCtx = document.getElementById('flow-rate-chart').getContext('2d');
+            const dailyUsageCtx = document.getElementById('daily-usage-chart').getContext('2d');
+            flowRateChart = new Chart(flowRateCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Flow Rate (L/min)',
+                        data: [],
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        x: { 
+                            display: true, 
+                            title: { display: true, text: 'Time' },
+                            ticks: { maxTicksLimit: 10 }
+                        },
+                        y: { 
+                            display: true, 
+                            title: { display: true, text: 'Flow Rate (L/min)' },
+                            beginAtZero: true 
+                        }
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                }
+            });
+            dailyUsageChart = new Chart(dailyUsageCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Daily Usage (L)',
+                        data: [],
+                        backgroundColor: '#16a34a',
+                        borderColor: '#16a34a',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        x: { 
+                            display: true, 
+                            title: { display: true, text: 'Date' }
+                        },
+                        y: { 
+                            display: true, 
+                            title: { display: true, text: 'Usage (L)' },
+                            beginAtZero: true 
+                        }
+                    }
+                }
+            });
+        }
+
+        function showToast(message, type = 'error') {
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: 'top',
+                position: 'right',
+                backgroundColor: type === 'error' ? '#ef4444' : '#22c55e',
+                className: 'rounded-lg'
+            }).showToast();
+        }
+
+        function updateCharts(data) {
+            if (!data || data.length === 0) return;
+            const last24Hours = moment().subtract(24, 'hours').toISOString();
+            const flowData = data.filter(d => moment(d.timestamp).isAfter(last24Hours)).reverse();
+            const timestamps = flowData.map(d => moment(d.timestamp).format('HH:mm'));
+            const flowRates = flowData.map(d => d.flow_rate);
+            flowRateChart.data.labels = timestamps;
+            flowRateChart.data.datasets[0].data = flowRates;
+            flowRateChart.update();
+            const dailyUsage = [];
+            const labels = [];
+            for (let i = 6; i >= 0; i--) {
+                const dayStart = moment().subtract(i, 'days').startOf('day').toISOString();
+                const dayEnd = moment(dayStart).endOf('day').toISOString();
+                const dayData = data.filter(d => moment(d.timestamp).isAfter(dayStart) && moment(d.timestamp).isBefore(dayEnd));
+                const usage = dayData.length > 0 ? Math.max(...dayData.map(d => d.total_volume)) - Math.min(...dayData.map(d => d.total_volume)) : 0;
+                dailyUsage.push(usage);
+                labels.push(moment(dayStart).format('YYYY-MM-DD'));
+            }
+            dailyUsageChart.data.labels = labels;
+            dailyUsageChart.data.datasets[0].data = dailyUsage;
+            dailyUsageChart.update();
+        }
+
+        function updateHistoryTable(data) {
+            const tbody = document.getElementById('history-table');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4">${moment(row.timestamp).format('YYYY-MM-DD HH:mm')}</td>
+                    <td class="px-6 py-4">${row.flow_rate.toFixed(1)}</td>
+                    <td class="px-6 py-4">${row.total_volume.toFixed(1)}</td>
+                    <td class="px-6 py-4">${row.valve_state ? 'Open' : 'Closed'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('page-info').textContent = `Page ${currentPage + 1}`;
+            document.getElementById('prev-page').disabled = currentPage === 0;
+            document.getElementById('next-page').disabled = data.length < recordsPerPage;
+        }
+
+        async function fetchData() {
+            try {
+                const response = await fetch(`${API_URL}/history?offset=${currentPage * recordsPerPage}&limit=${recordsPerPage}`);
+                if (!response.ok) throw new Error(`Failed to fetch history: ${response.status}`);
+                const data = await response.json();
+                updateCharts(data);
+                updateHistoryTable(data);
+                updateOnlineStatus(data);
+                checkHighFlowRate(data);
+            } catch (error) {
+                showToast(`Error fetching data: ${error.message}`, 'error');
+            }
+            document.getElementById('last-updated').textContent = `Last updated: ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
+        }
+
+        async function fetchMetrics() {
+            try {
+                const response = await fetch(`${API_URL}/metrics`);
+                if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.status}`);
+                const metrics = await response.json();
+                updateMetricsDisplay(metrics);
+            } catch (error) {
+                showToast(`Error fetching metrics: ${error.message}`, 'error');
+            }
+        }
+
+        function updateMetricsDisplay(metrics) {
+            const formatUsage = (value) => {
+                if (!value && value !== 0) return '0 L';
+                return value < 1000 ? 
+                    `${Math.round(value * 10) / 10} L` : 
+                    `${Math.round(value / 1000.0 * 100) / 100} kL`;
+            };
+            document.getElementById('today-usage').textContent = formatUsage(metrics.today || 0);
+            document.getElementById('week-usage').textContent = formatUsage(metrics.last_week || 0);
+            document.getElementById('month-usage').textContent = formatUsage(metrics.last_month || 0);
+        }
+
+        async function toggleValve() {
+            const valveToggle = document.getElementById('valve-toggle');
+            const switchLabel = valveToggle.parentElement;
+            const desiredState = valveToggle.checked ? 'open' : 'close';
+            switchLabel.classList.add('disabled');
+            valveToggle.disabled = true;
+
+            try {
+                const currentState = await getValveState();
+                if (currentState === desiredState) {
+                    showToast(`Valve is already ${desiredState}`, 'success');
+                    return;
+                }
+                const response = await fetch(`${API_URL}/set_valve/${desiredState}`, { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to set valve: ${response.status} - ${errorText}`);
+                }
+                const result = await response.json();
+                if (result.valve === desiredState) {
+                    showToast(`Valve set to ${desiredState}`, 'success');
+                } else {
+                    throw new Error(`Server returned unexpected state: ${result.valve}`);
+                }
+            } catch (error) {
+                showToast(`Failed to set valve to ${desiredState}: ${error.message}`, 'error');
+                await getValveState();
+            } finally {
+                switchLabel.classList.remove('disabled');
+                valveToggle.disabled = false;
+            }
+        }
+
+        async function getValveState() {
+            try {
+                const response = await fetch(`${API_URL}/valve`);
+                if (!response.ok) throw new Error(`Failed to fetch valve state: ${response.status}`);
+                const state = await response.text();
+                if (state !== 'open' && state !== 'close') {
+                    throw new Error(`Invalid valve state received: ${state}`);
+                }
+                document.getElementById('valve-toggle').checked = state === 'open';
+                return state;
+            } catch (error) {
+                showToast(`Error fetching valve state: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        function updateOnlineStatus(data) {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            let isOnline = false;
+            let message = '';
+
+            if (data && data.length > 0) {
+                const latestTimestamp = moment(data[data.length - 1].timestamp);
+                isOnline = moment().diff(latestTimestamp, 'seconds') < 30;
+                message = isOnline ? '' : `System offline: Last data at ${latestTimestamp.format('YYYY-MM-DD HH:mm:ss')}`;
+            } else {
+                isOnline = false;
+                message = 'System offline: No data received';
+            }
+
+            // Only show toast if status changed from Online to Offline or on first Offline detection
+            if (lastOnlineStatus !== null && lastOnlineStatus && !isOnline) {
+                showToast(message, 'error');
+            } else if (lastOnlineStatus === null && !isOnline) {
+                showToast(message, 'error');
+            }
+
+            lastOnlineStatus = isOnline;
+
+            statusDot.classList.toggle('status-online', isOnline);
+            statusDot.classList.toggle('status-offline', !isOnline);
+            statusText.textContent = isOnline ? 'Online' : 'Offline';
+        }
+
+        function checkHighFlowRate(data) {
+            const alertElement = document.getElementById('high-flow-alert');
+            if (data && data.length > 0 && data[data.length - 1].flow_rate > 100) {
+                alertElement.classList.remove('hidden');
+            } else {
+                alertElement.classList.add('hidden');
+            }
+        }
+
+        function setOfflineStatus() {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            statusDot.classList.remove('status-online');
+            statusDot.classList.add('status-offline');
+            statusText.textContent = 'Offline';
+        }
+
+        async function exportToCSV() {
+            try {
+                const response = await fetch(`${API_URL}/history?offset=0&limit=1000`);
+                if (!response.ok) throw new Error(`Failed to fetch history for export: ${response.status}`);
+                const data = await response.json();
+                const headers = ['Timestamp', 'Flow Rate (L/min)', 'Total Volume (L)', 'Valve State'];
+                const rows = data.map(d => [
+                    moment(d.timestamp).format('YYYY-MM-DD HH:mm'),
+                    d.flow_rate,
+                    d.total_volume,
+                    d.valve_state ? 'Open' : 'Closed'
+                ]);
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.join(','))
+                ].join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `water_flow_data_${moment().format('YYYYMMDD_HHmmss')}.csv`);
+                link.click();
+                URL.revokeObjectURL(url);
+                showToast('Data exported successfully', 'success');
+            } catch (error) {
+                showToast(`Error exporting data: ${error.message}`, 'error');
+            }
+        }
+
+        function changePage(direction) {
+            currentPage += direction;
+            if (currentPage < 0) currentPage = 0;
+            fetchData();
+        }
+    </script>
+</body>
+</html>
