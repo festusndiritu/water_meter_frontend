@@ -52,7 +52,7 @@
             background-color: #4b5563;
         }
         .dark .text-gray-900 {
-            color: #d1d5db expectativa
+            color: #d1d5db;
         }
         .dark .text-gray-500 {
             color: #9ca3af;
@@ -109,6 +109,29 @@
         .table-container {
             max-height: 400px;
             overflow-y: auto;
+        }
+        .valve-chip {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            display: inline-block;
+        }
+        .valve-open {
+            background-color: #22c55e;
+            color: white;
+        }
+        .valve-closed {
+            background-color: #ef4444;
+            color: white;
+        }
+        thead {
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+        .dark thead {
+            background-color: #374151;
+            color: #d1d5db;
         }
     </style>
 </head>
@@ -219,14 +242,16 @@
                     </svg>
                     Historical Data
                 </h3>
-                <div class="flex justify-between mb-4">
-                    <button id="prev-page" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50" disabled>Previous</button>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-2">
+                        <button id="prev-page" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Previous</button>
+                        <button id="next-page" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                    </div>
                     <span id="page-info" class="text-sm font-medium">Page 1</span>
-                    <button id="next-page" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Next</button>
                 </div>
                 <div class="table-container">
                     <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                        <thead class="text-xs text-gray-700 uppercase">
                             <tr>
                                 <th class="px-6 py-3">Timestamp</th>
                                 <th class="px-6 py-3">Flow Rate (L/min)</th>
@@ -247,13 +272,13 @@
     </div>
 
     <script>
-        const API_URL = "https://xxxxxxxxx.up.railway.app";
+        const API_URL = "https://web-production-83fd.up.railway.app";
         let flowRateChart;
         let dailyUsageChart;
         let currentPage = 0;
         const recordsPerPage = 100;
         const refreshInterval = 1000;
-        let lastOnlineStatus = null; // Track previous online/offline status
+        let lastOnlineStatus = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             setupThemeToggle();
@@ -411,7 +436,11 @@
                     <td class="px-6 py-4">${moment(row.timestamp).format('YYYY-MM-DD HH:mm')}</td>
                     <td class="px-6 py-4">${row.flow_rate.toFixed(1)}</td>
                     <td class="px-6 py-4">${row.total_volume.toFixed(1)}</td>
-                    <td class="px-6 py-4">${row.valve_state ? 'Open' : 'Closed'}</td>
+                    <td class="px-6 py-4">
+                        <span class="valve-chip valve-${row.valve_state ? 'open' : 'closed'}">
+                            ${row.valve_state ? 'Open' : 'Closed'}
+                        </span>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -429,6 +458,7 @@
                 updateHistoryTable(data);
                 updateOnlineStatus(data);
                 checkHighFlowRate(data);
+                document.getElementById('next-page').disabled = data.length < recordsPerPage;
             } catch (error) {
                 showToast(`Error fetching data: ${error.message}`, 'error');
             }
@@ -507,7 +537,6 @@
                 document.getElementById('valve-toggle').checked = state === 'open';
                 return state;
             } catch (error) {
-                showToast(`Error fetching valve state: ${error.message}`, 'error');
                 return null;
             }
         }
@@ -527,7 +556,6 @@
                 message = 'System offline: No data received';
             }
 
-            // Only show toast if status changed from Online to Offline or on first Offline detection
             if (lastOnlineStatus !== null && lastOnlineStatus && !isOnline) {
                 showToast(message, 'error');
             } else if (lastOnlineStatus === null && !isOnline) {
